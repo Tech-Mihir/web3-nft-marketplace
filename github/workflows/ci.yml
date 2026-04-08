@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_NFT_CONTRACT_ADDRESS: ${{ secrets.VITE_NFT_CONTRACT_ADDRESS || '0x0000000000000000000000000000000000000001' }}
+          VITE_REWARD_TOKEN_ADDRESS: ${{ secrets.VITE_REWARD_TOKEN_ADDRESS || '0x0000000000000000000000000000000000000002' }}
+          VITE_STAKING_CONTRACT_ADDRESS: ${{ secrets.VITE_STAKING_CONTRACT_ADDRESS || '0x0000000000000000000000000000000000000003' }}
+          VITE_CHAIN_ID: ${{ secrets.VITE_CHAIN_ID || '1' }}
+
+      - name: Verify build output
+        run: test -f dist/index.html
