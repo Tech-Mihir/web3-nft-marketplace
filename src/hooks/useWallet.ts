@@ -1,22 +1,26 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { StellarWallet } from '../types'
 
-// Use @stellar/freighter-api for reliable Freighter detection
-let freighterApi: {
-  isConnected: () => Promise<{ isConnected: boolean }>
-  getPublicKey: () => Promise<{ publicKey: string; error?: string }>
-  signTransaction: (xdr: string, opts?: object) => Promise<{ signedTxXdr: string; error?: string }>
-} | null = null
-
-async function getFreighterApi() {
-  if (freighterApi) return freighterApi
-  try {
-    const mod = await import('@stellar/freighter-api')
-    freighterApi = mod
-    return freighterApi
-  } catch {
-    return null
+// Freighter v5+ injects window.freighterApi (not window.freighter)
+declare global {
+  interface Window {
+    freighter?: unknown
+    freighterApi?: {
+      isConnected: () => Promise<{ isConnected: boolean }>
+      getAddress: () => Promise<{ address: string; error?: string }>
+      signTransaction: (xdr: string, opts?: object) => Promise<{ signedTxXdr: string; error?: string }>
+    }
   }
+}
+
+async function getApi() {
+  // Wait up to 3s for extension to inject
+  for (let i = 0; i < 30; i++) {
+    if (window.freighterApi) return window.freighterApi
+    if (window.freighter) return window.freighter as typeof window.freighterApi
+    await new Promise(r => setTimeout(r, 100))
+  }
+  return null
 }
 
 export function useWallet(): StellarWallet {
@@ -26,13 +30,13 @@ export function useWallet(): StellarWallet {
 
   useEffect(() => {
     const tryReconnect = async () => {
-      const api = await getFreighterApi()
+      const api = await getApi()
       if (!api) return
       try {
         const { isConnected } = await api.isConnected()
         if (isConnected) {
-          const result = await api.getPublicKey()
-          if (result.publicKey) setPublicKey(result.publicKey)
+          const result = await api.getAddress()
+          if (result?.address) setPublicKey(result.address)
         }
       } catch { /* not connected */ }
     }
@@ -43,22 +47,19 @@ export function useWallet(): StellarWallet {
     setIsConnecting(true)
     setError(null)
     try {
-      const api = await getFreighterApi()
+      const api = await getApi()
       if (!api) {
-        setError('Freighter wallet is not installed. Please install it from freighter.app')
+        setError('Freighter wallet not detected. Please install Freighter and refresh.')
         return
       }
-      const { isConnected } = await api.isConnected()
-      if (!isConnected) {
-        setError('Please open Freighter and connect to this site first.')
-        return
-      }
-      const result = await api.getPublicKey()
-      if (result.error) {
+      const result = await api.getAddress()
+      if (result?.error) {
         setError(result.error)
         return
       }
-      setPublicKey(result.publicKey)
+      if (result?.address) {
+        setPublicKey(result.address)
+      }
     } catch (err: unknown) {
       const e = err as { message?: string }
       setError(e.message ?? 'Failed to connect Freighter wallet')
@@ -73,12 +74,12 @@ export function useWallet(): StellarWallet {
   }, [])
 
   const signTransaction = useCallback(async (xdr: string): Promise<string> => {
-    const api = await getFreighterApi()
-    if (!api) throw new Error('Freighter not installed')
+    const api = await getApi()
+    if (!api) throw new Error('Freighter not available')
     const networkPassphrase = import.meta.env.VITE_NETWORK_PASSPHRASE || 'Test SDF Network ; September 2015'
     const result = await api.signTransaction(xdr, { networkPassphrase })
-    if (result.error) throw new Error(result.error)
-    return result.signedTxXdr
+    if (result?.error) throw new Error(result.error)
+    return result?.signedTxXdr ?? ''
   }, [])
 
   return {
