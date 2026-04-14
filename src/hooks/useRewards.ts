@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ethers } from 'ethers'
 import { getContractConfig } from '../contracts/config'
-import StakingContractABI from '../contracts/abis/StakingContract.json'
-import RewardTokenABI from '../contracts/abis/RewardToken.json'
+import { readContract, buildContractCall, submitTransaction, nativeToScVal, Address } from '../contracts/stellar'
 import { formatBalance } from '../utils/formatBalance'
 import { parseTransactionError } from '../utils/parseError'
 
@@ -16,9 +14,9 @@ interface UseRewardsReturn {
 }
 
 export function useRewards(
-  account: string | null,
-  signer: ethers.Signer | null,
-  onToast: (type: 'pending' | 'success' | 'error', message: string) => void
+  publicKey: string,
+  signTransaction: (xdr: string) => Promise<string>,
+  addToast: (t: { type: 'pending' | 'success' | 'error'; message: string }) => void
 ): UseRewardsReturn {
   const [balance, setBalance] = useState('0.0000')
   const [isLoading, setIsLoading] = useState(false)
@@ -26,48 +24,53 @@ export function useRewards(
   const [error, setError] = useState<string | null>(null)
 
   const fetchBalance = useCallback(async () => {
-    if (!account || !signer) return
+    if (!publicKey) { setBalance('0.0000'); return }
     setIsLoading(true)
+    setError(null)
     try {
       const config = getContractConfig()
-      const stakingContract = new ethers.Contract(config.stakingContractAddress, StakingContractABI, signer)
-      const rewardToken = new ethers.Contract(config.rewardTokenAddress, RewardTokenABI, signer)
+      // Read pending rewards from staking contract (inter-contract call)
+      const pending = await readContract(publicKey, config.stakingContractId, 'pending_rewards', [
+        new Address(publicKey).toScVal(),
+      ]) as bigint
 
-      const [pending, decimals]: [bigint, number] = await Promise.all([
-        stakingContract.pendingRewards(account),
-        rewardToken.decimals(),
-      ])
-      setBalance(formatBalance(pending, decimals))
+      // Read token decimals
+      const decimals = await readContract(publicKey, config.tokenContractId, 'decimals', []) as number
+
+      setBalance(formatBalance(pending ?? 0n, decimals ?? 7))
     } catch (err) {
       setError(parseTransactionError(err))
+      setBalance('0.0000')
     } finally {
       setIsLoading(false)
     }
-  }, [account, signer])
+  }, [publicKey])
 
-  useEffect(() => {
-    fetchBalance()
-  }, [fetchBalance])
+  useEffect(() => { fetchBalance() }, [fetchBalance])
 
   const claim = useCallback(async () => {
-    if (!signer) return
+    if (!publicKey) return
     setIsClaiming(true)
-    onToast('pending', 'Claiming rewards...')
+    setError(null)
+    addToast({ type: 'pending', message: 'Claiming Stellar rewards...' })
     try {
       const config = getContractConfig()
-      const stakingContract = new ethers.Contract(config.stakingContractAddress, StakingContractABI, signer)
-      const tx = await stakingContract.claim()
-      await tx.wait()
-      onToast('success', 'Rewards claimed successfully!')
+      // Claim triggers inter-contract call: staking → token contract (mint/transfer)
+      const xdrStr = await buildContractCall(publicKey, config.stakingContractId, 'claim_rewards', [
+        new Address(publicKey).toScVal(),
+      ])
+      const signed = await signTransaction(xdrStr)
+      const hash = await submitTransaction(signed)
+      addToast({ type: 'success', message: `Rewards claimed! Tx: ${hash.slice(0, 8)}...` })
       await fetchBalance()
     } catch (err) {
       const msg = parseTransactionError(err)
       setError(msg)
-      onToast('error', msg)
+      addToast({ type: 'error', message: msg })
     } finally {
       setIsClaiming(false)
     }
-  }, [signer, fetchBalance, onToast])
+  }, [publicKey, signTransaction, addToast, fetchBalance])
 
   return { balance, isLoading, isClaiming, error, claim, refresh: fetchBalance }
 }
