@@ -1,32 +1,22 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { StellarWallet } from '../types'
 
-declare global {
-  interface Window {
-    freighter?: {
-      isConnected: () => Promise<boolean>
-      getPublicKey: () => Promise<string>
-      signTransaction: (xdr: string, opts?: { networkPassphrase?: string }) => Promise<string>
-      getNetwork: () => Promise<string>
-    }
-  }
-}
+// Use @stellar/freighter-api for reliable Freighter detection
+let freighterApi: {
+  isConnected: () => Promise<{ isConnected: boolean }>
+  getPublicKey: () => Promise<{ publicKey: string; error?: string }>
+  signTransaction: (xdr: string, opts?: object) => Promise<{ signedTxXdr: string; error?: string }>
+} | null = null
 
-// Wait for Freighter to inject into the page
-async function waitForFreighter(maxWait = 3000): Promise<boolean> {
-  if (window.freighter) return true
-  return new Promise((resolve) => {
-    const start = Date.now()
-    const interval = setInterval(() => {
-      if (window.freighter) {
-        clearInterval(interval)
-        resolve(true)
-      } else if (Date.now() - start > maxWait) {
-        clearInterval(interval)
-        resolve(false)
-      }
-    }, 100)
-  })
+async function getFreighterApi() {
+  if (freighterApi) return freighterApi
+  try {
+    const mod = await import('@stellar/freighter-api')
+    freighterApi = mod
+    return freighterApi
+  } catch {
+    return null
+  }
 }
 
 export function useWallet(): StellarWallet {
@@ -34,16 +24,15 @@ export function useWallet(): StellarWallet {
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Auto-reconnect if already connected
   useEffect(() => {
     const tryReconnect = async () => {
-      const found = await waitForFreighter()
-      if (!found || !window.freighter) return
+      const api = await getFreighterApi()
+      if (!api) return
       try {
-        const connected = await window.freighter.isConnected()
-        if (connected) {
-          const key = await window.freighter.getPublicKey()
-          if (key) setPublicKey(key)
+        const { isConnected } = await api.isConnected()
+        if (isConnected) {
+          const result = await api.getPublicKey()
+          if (result.publicKey) setPublicKey(result.publicKey)
         }
       } catch { /* not connected */ }
     }
@@ -54,13 +43,22 @@ export function useWallet(): StellarWallet {
     setIsConnecting(true)
     setError(null)
     try {
-      const found = await waitForFreighter()
-      if (!found || !window.freighter) {
+      const api = await getFreighterApi()
+      if (!api) {
         setError('Freighter wallet is not installed. Please install it from freighter.app')
         return
       }
-      const key = await window.freighter.getPublicKey()
-      setPublicKey(key)
+      const { isConnected } = await api.isConnected()
+      if (!isConnected) {
+        setError('Please open Freighter and connect to this site first.')
+        return
+      }
+      const result = await api.getPublicKey()
+      if (result.error) {
+        setError(result.error)
+        return
+      }
+      setPublicKey(result.publicKey)
     } catch (err: unknown) {
       const e = err as { message?: string }
       setError(e.message ?? 'Failed to connect Freighter wallet')
@@ -75,10 +73,12 @@ export function useWallet(): StellarWallet {
   }, [])
 
   const signTransaction = useCallback(async (xdr: string): Promise<string> => {
-    const found = await waitForFreighter()
-    if (!found || !window.freighter) throw new Error('Freighter not installed')
+    const api = await getFreighterApi()
+    if (!api) throw new Error('Freighter not installed')
     const networkPassphrase = import.meta.env.VITE_NETWORK_PASSPHRASE || 'Test SDF Network ; September 2015'
-    return window.freighter.signTransaction(xdr, { networkPassphrase })
+    const result = await api.signTransaction(xdr, { networkPassphrase })
+    if (result.error) throw new Error(result.error)
+    return result.signedTxXdr
   }, [])
 
   return {
