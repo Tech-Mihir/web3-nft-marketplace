@@ -11,7 +11,7 @@ import { addToast as addToastUtil, removeToast } from './utils/toastQueue'
 import type { Toast } from './types'
 
 export default function App() {
-  const { publicKey, isConnected, isConnecting, error: walletError, connect, disconnect, signTransaction } = useWallet()
+  const { publicKey, isConnecting, error: walletError, connect, disconnect, signTransaction } = useWallet()
   const [toasts, setToasts] = useState<Toast[]>([])
 
   const addToast = useCallback((toast: Omit<Toast, 'id'>) => {
@@ -26,7 +26,6 @@ export default function App() {
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-gray-950 text-white">
-        {/* Header */}
         <header className="sticky top-0 z-40 bg-gray-950/80 backdrop-blur-md border-b border-white/10">
           <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
             <div className="flex items-center gap-6">
@@ -44,15 +43,10 @@ export default function App() {
           </div>
         </header>
 
-        {/* Wallet error banner - only show explicit errors after connect attempt */}
-        {walletError && publicKey === '' && walletError !== 'Freighter wallet not detected. Please install Freighter and refresh.' && (
-          <div className="bg-orange-500/10 border-b border-orange-500/30 px-4 py-2 text-center">
-            <p className="text-orange-400 text-sm">
-              Freighter wallet not installed.{' '}
-              <a href="https://freighter.app" target="_blank" rel="noopener noreferrer" className="underline hover:text-orange-300">
-                Install Freighter
-              </a>
-            </p>
+        {/* Only show error after user tries to connect */}
+        {walletError && !walletError.includes('not installed') && (
+          <div className="bg-red-500/10 border-b border-red-500/30 px-4 py-2 text-center">
+            <p className="text-red-400 text-sm">{walletError}</p>
           </div>
         )}
 
