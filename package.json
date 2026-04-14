@@ -1,5 +1,5 @@
 {
-  "name": "web3-nft-game-marketplace",
+  "name": "stellar-nft-game-marketplace",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -12,7 +12,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "ethers": "^6.11.1",
+    "@stellar/stellar-sdk": "^12.3.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.22.3"
