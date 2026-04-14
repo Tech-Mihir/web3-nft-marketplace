@@ -1,35 +1,14 @@
-import type { ethers } from 'ethers'
-
 export interface NFT {
   tokenId: string
   imageUrl: string
   isStaked: boolean
+  owner: string
 }
 
 export interface Toast {
   id: string
   type: 'pending' | 'success' | 'error'
   message: string
-}
-
-export interface WalletState {
-  account: string | null
-  chainId: number | null
-  isConnected: boolean
-  isConnecting: boolean
-  error: string | null
-}
-
-export interface NFTState {
-  nfts: NFT[]
-  isLoading: boolean
-  isMinting: boolean
-  error: string | null
-}
-
-export interface StakingState {
-  pendingTransactions: Record<string, 'staking' | 'unstaking'>
-  error: string | null
 }
 
 export interface RewardsState {
@@ -53,27 +32,20 @@ export interface NFTMetadata {
   }>
 }
 
-export interface TransactionState {
-  hash: string
-  status: 'pending' | 'confirmed' | 'failed'
-  error?: string
-}
-
 export interface ContractConfig {
-  nftContractAddress: string
-  rewardTokenAddress: string
-  stakingContractAddress: string
-  chainId: number
+  nftContractId: string
+  tokenContractId: string
+  stakingContractId: string
+  networkPassphrase: string
+  rpcUrl: string
 }
 
-export interface UseWalletReturn {
-  account: string | null
+export interface StellarWallet {
+  publicKey: string
   isConnected: boolean
   isConnecting: boolean
   error: string | null
   connect: () => Promise<void>
   disconnect: () => void
-  provider: ethers.BrowserProvider | null
-  signer: ethers.Signer | null
-  chainId: number | null
+  signTransaction: (xdr: string) => Promise<string>
 }
