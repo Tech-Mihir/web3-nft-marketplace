@@ -1,19 +1,20 @@
 import type { ContractConfig } from '../types'
 
+// Stellar Testnet RPC
+export const STELLAR_TESTNET_RPC = 'https://soroban-testnet.stellar.org'
+export const STELLAR_TESTNET_PASSPHRASE = 'Test SDF Network ; September 2015'
+export const STELLAR_MAINNET_PASSPHRASE = 'Public Global Stellar Network ; September 2015'
+
 export function getContractConfig(): ContractConfig {
-  const nftContractAddress = import.meta.env.VITE_NFT_CONTRACT_ADDRESS
-  const rewardTokenAddress = import.meta.env.VITE_REWARD_TOKEN_ADDRESS
-  const stakingContractAddress = import.meta.env.VITE_STAKING_CONTRACT_ADDRESS
-  const chainIdStr = import.meta.env.VITE_CHAIN_ID
+  const nftContractId = import.meta.env.VITE_NFT_CONTRACT_ID
+  const tokenContractId = import.meta.env.VITE_TOKEN_CONTRACT_ID
+  const stakingContractId = import.meta.env.VITE_STAKING_CONTRACT_ID
+  const rpcUrl = import.meta.env.VITE_SOROBAN_RPC_URL || STELLAR_TESTNET_RPC
+  const networkPassphrase = import.meta.env.VITE_NETWORK_PASSPHRASE || STELLAR_TESTNET_PASSPHRASE
 
-  if (!nftContractAddress) throw new Error('Missing env var: VITE_NFT_CONTRACT_ADDRESS')
-  if (!rewardTokenAddress) throw new Error('Missing env var: VITE_REWARD_TOKEN_ADDRESS')
-  if (!stakingContractAddress) throw new Error('Missing env var: VITE_STAKING_CONTRACT_ADDRESS')
+  if (!nftContractId) throw new Error('Missing env var: VITE_NFT_CONTRACT_ID')
+  if (!tokenContractId) throw new Error('Missing env var: VITE_TOKEN_CONTRACT_ID')
+  if (!stakingContractId) throw new Error('Missing env var: VITE_STAKING_CONTRACT_ID')
 
-  return {
-    nftContractAddress,
-    rewardTokenAddress,
-    stakingContractAddress,
-    chainId: chainIdStr ? parseInt(chainIdStr, 10) : 1,
-  }
+  return { nftContractId, tokenContractId, stakingContractId, networkPassphrase, rpcUrl }
 }
