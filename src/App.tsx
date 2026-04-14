@@ -52,7 +52,7 @@ export default function App() {
         </header>
 
         {/* Freighter not installed warning - only show after 3s check */}
-        {freighterChecked && walletError && walletError.includes('Freighter') && (
+        {freighterChecked && walletError && walletError.includes('not detected') && (
           <div className="bg-orange-500/10 border-b border-orange-500/30 px-4 py-2 text-center">
             <p className="text-orange-400 text-sm">
               Freighter wallet not installed.{' '}
