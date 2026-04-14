@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ethers } from 'ethers'
 import type { NFT } from '../types'
 import { getContractConfig } from '../contracts/config'
-import NFTContractABI from '../contracts/abis/NFTContract.json'
-import StakingContractABI from '../contracts/abis/StakingContract.json'
+import { readContract, buildContractCall, submitTransaction, nativeToScVal, Address } from '../contracts/stellar'
 import { parseTransactionError } from '../utils/parseError'
+import { xdr } from '@stellar/stellar-sdk'
 
 interface UseNFTsReturn {
   nfts: NFT[]
@@ -13,100 +12,116 @@ interface UseNFTsReturn {
   error: string | null
   refresh: () => Promise<void>
   mint: () => Promise<void>
-  addToast: (toast: { type: 'pending' | 'success' | 'error'; message: string }) => void
 }
 
 export function useNFTs(
-  account: string | null,
-  signer: ethers.Signer | null,
-  addToast: (toast: { type: 'pending' | 'success' | 'error'; message: string }) => void
-): Omit<UseNFTsReturn, 'addToast'> {
+  publicKey: string,
+  signTransaction: (xdr: string) => Promise<string>,
+  addToast: (t: { type: 'pending' | 'success' | 'error'; message: string }) => void
+): UseNFTsReturn {
   const [nfts, setNfts] = useState<NFT[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isMinting, setIsMinting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const fetchNFTs = useCallback(async () => {
-    if (!account || !signer) {
-      setNfts([])
-      return
-    }
+    if (!publicKey) { setNfts([]); return }
     setIsLoading(true)
     setError(null)
     try {
       const config = getContractConfig()
-      const nftContract = new ethers.Contract(config.nftContractAddress, NFTContractABI, signer)
-      const stakingContract = new ethers.Contract(config.stakingContractAddress, StakingContractABI, signer)
 
-      const balance: bigint = await nftContract.balanceOf(account)
-      const stakedRaw: bigint[] = await stakingContract.stakedTokens(account)
-      const stakedSet = new Set(stakedRaw.map((id) => id.toString()))
+      // Get balance (number of NFTs owned)
+      const balance = await readContract(publicKey, config.nftContractId, 'balance_of', [
+        new Address(publicKey).toScVal(),
+      ]) as bigint
 
-      const tokenIds: string[] = []
-      for (let i = 0n; i < balance; i++) {
-        const tokenId: bigint = await nftContract.tokenOfOwnerByIndex(account, i)
-        tokenIds.push(tokenId.toString())
-      }
+      // Get staked token IDs
+      let stakedIds: string[] = []
+      try {
+        const staked = await readContract(publicKey, config.stakingContractId, 'staked_tokens', [
+          new Address(publicKey).toScVal(),
+        ]) as bigint[]
+        stakedIds = staked.map((id) => id.toString())
+      } catch { /* staking contract may not have tokens */ }
 
-      // Also include staked tokens (they're transferred to staking contract)
-      for (const id of stakedRaw) {
-        const idStr = id.toString()
-        if (!tokenIds.includes(idStr)) tokenIds.push(idStr)
-      }
+      const stakedSet = new Set(stakedIds)
 
-      const nftList: NFT[] = await Promise.all(
-        tokenIds.map(async (tokenId) => {
+      // Fetch each token
+      const nftList: NFT[] = []
+      for (let i = 0n; i < (balance as bigint); i++) {
+        try {
+          const tokenId = await readContract(publicKey, config.nftContractId, 'token_of_owner_by_index', [
+            new Address(publicKey).toScVal(),
+            nativeToScVal(i, { type: 'u32' }),
+          ]) as bigint
+
+          const tokenIdStr = tokenId.toString()
+          let imageUrl = `https://placehold.co/400x400/0f0f23/a78bfa?text=NFT+%23${tokenIdStr}`
+
           try {
-            const uri: string = await nftContract.tokenURI(BigInt(tokenId))
-            const url = uri.startsWith('ipfs://')
-              ? uri.replace('ipfs://', 'https://ipfs.io/ipfs/')
-              : uri
-            const res = await fetch(url)
-            const metadata = await res.json()
-            const imageUrl = (metadata.image as string).startsWith('ipfs://')
-              ? (metadata.image as string).replace('ipfs://', 'https://ipfs.io/ipfs/')
-              : (metadata.image as string)
-            return { tokenId, imageUrl, isStaked: stakedSet.has(tokenId) }
-          } catch {
-            return {
-              tokenId,
-              imageUrl: `https://placehold.co/400x400/1a1a2e/ffffff?text=NFT+%23${tokenId}`,
-              isStaked: stakedSet.has(tokenId),
+            const uri = await readContract(publicKey, config.nftContractId, 'token_uri', [
+              nativeToScVal(tokenId, { type: 'u32' }),
+            ]) as string
+            if (uri) {
+              const url = uri.startsWith('ipfs://')
+                ? uri.replace('ipfs://', 'https://ipfs.io/ipfs/')
+                : uri
+              const res = await fetch(url)
+              const meta = await res.json()
+              if (meta.image) {
+                imageUrl = meta.image.startsWith('ipfs://')
+                  ? meta.image.replace('ipfs://', 'https://ipfs.io/ipfs/')
+                  : meta.image
+              }
             }
-          }
-        })
-      )
+          } catch { /* use placeholder */ }
+
+          nftList.push({ tokenId: tokenIdStr, imageUrl, isStaked: stakedSet.has(tokenIdStr), owner: publicKey })
+        } catch { /* skip failed token */ }
+      }
+
+      // Also add staked NFTs
+      for (const id of stakedIds) {
+        if (!nftList.find((n) => n.tokenId === id)) {
+          nftList.push({
+            tokenId: id,
+            imageUrl: `https://placehold.co/400x400/0f0f23/a78bfa?text=NFT+%23${id}`,
+            isStaked: true,
+            owner: publicKey,
+          })
+        }
+      }
+
       setNfts(nftList)
     } catch (err) {
       setError(parseTransactionError(err))
     } finally {
       setIsLoading(false)
     }
-  }, [account, signer])
+  }, [publicKey])
 
-  useEffect(() => {
-    fetchNFTs()
-  }, [fetchNFTs])
+  useEffect(() => { fetchNFTs() }, [fetchNFTs])
 
   const mint = useCallback(async () => {
-    if (!signer) return
+    if (!publicKey) return
     setIsMinting(true)
-    const toastId = crypto.randomUUID()
-    addToast({ type: 'pending', message: 'Minting NFT...' })
+    addToast({ type: 'pending', message: 'Minting NFT on Stellar...' })
     try {
       const config = getContractConfig()
-      const nftContract = new ethers.Contract(config.nftContractAddress, NFTContractABI, signer)
-      const tx = await nftContract.mint()
-      await tx.wait()
-      addToast({ type: 'success', message: 'NFT minted successfully!' })
+      const xdrStr = await buildContractCall(publicKey, config.nftContractId, 'mint', [
+        new Address(publicKey).toScVal(),
+      ])
+      const signed = await signTransaction(xdrStr)
+      const hash = await submitTransaction(signed)
+      addToast({ type: 'success', message: `NFT minted! Tx: ${hash.slice(0, 8)}...` })
       await fetchNFTs()
     } catch (err) {
       addToast({ type: 'error', message: parseTransactionError(err) })
     } finally {
       setIsMinting(false)
-      void toastId
     }
-  }, [signer, addToast, fetchNFTs])
+  }, [publicKey, signTransaction, addToast, fetchNFTs])
 
   return { nfts, isLoading, isMinting, error, refresh: fetchNFTs, mint }
 }
