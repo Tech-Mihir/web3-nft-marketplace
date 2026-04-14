@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { useWallet } from './hooks/useWallet'
 import { Navigation } from './components/Navigation/Navigation'
@@ -13,6 +13,13 @@ import type { Toast } from './types'
 export default function App() {
   const { publicKey, isConnected, isConnecting, error: walletError, connect, disconnect, signTransaction } = useWallet()
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [freighterChecked, setFreighterChecked] = useState(false)
+
+  // Wait 3s before showing "not installed" warning
+  useEffect(() => {
+    const timer = setTimeout(() => setFreighterChecked(true), 3000)
+    return () => clearTimeout(timer)
+  }, [])
 
   const addToast = useCallback((toast: Omit<Toast, 'id'>) => {
     const t: Toast = { ...toast, id: crypto.randomUUID() }
@@ -44,8 +51,8 @@ export default function App() {
           </div>
         </header>
 
-        {/* Freighter not installed warning */}
-        {walletError && walletError.includes('Freighter') && (
+        {/* Freighter not installed warning - only show after 3s check */}
+        {freighterChecked && walletError && walletError.includes('Freighter') && (
           <div className="bg-orange-500/10 border-b border-orange-500/30 px-4 py-2 text-center">
             <p className="text-orange-400 text-sm">
               Freighter wallet not installed.{' '}
