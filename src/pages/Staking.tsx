@@ -1,4 +1,3 @@
-import { ethers } from 'ethers'
 import { useNFTs } from '../hooks/useNFTs'
 import { useStaking } from '../hooks/useStaking'
 import { useRewards } from '../hooks/useRewards'
@@ -6,112 +5,83 @@ import { NFTCard } from '../components/NFTCard/NFTCard'
 import type { Toast } from '../types'
 
 interface StakingProps {
-  account: string | null
-  signer: ethers.Signer | null
-  onToast: (type: Toast['type'], message: string) => void
+  publicKey: string
+  signTransaction: (xdr: string) => Promise<string>
+  addToast: (t: Omit<Toast, 'id'>) => void
 }
 
-export function Staking({ account, signer, onToast }: StakingProps) {
-  const { nfts, isLoading, refresh } = useNFTs(account, signer, onToast)
-  const { stake, unstake, isStaking, isUnstaking } = useStaking(signer, onToast, refresh)
-  const { balance, isClaiming, claim } = useRewards(account, signer, onToast)
+export function Staking({ publicKey, signTransaction, addToast }: StakingProps) {
+  const toastFn = (t: { type: 'pending' | 'success' | 'error'; message: string }) => addToast(t)
+  const { nfts, isLoading, refresh } = useNFTs(publicKey, signTransaction, toastFn)
+  const { unstake, isUnstaking } = useStaking(publicKey, signTransaction, toastFn, refresh)
+  const { balance, isClaiming, claim } = useRewards(publicKey, signTransaction, toastFn)
 
-  const stakedNfts = nfts.filter((n) => n.isStaked)
-  const unstakedNfts = nfts.filter((n) => !n.isStaked)
+  const stakedNFTs = nfts.filter((n) => n.isStaked)
 
-  if (!account) {
+  if (!publicKey) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+      <div className="flex flex-col items-center justify-center py-32 text-center px-4">
         <div className="text-5xl mb-4">🔌</div>
         <h2 className="text-xl font-semibold text-white mb-2">Wallet not connected</h2>
-        <p className="text-gray-400">Connect your MetaMask wallet to manage staking.</p>
+        <p className="text-gray-400">Connect your Freighter wallet to manage staking.</p>
       </div>
     )
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      {/* Rewards Banner */}
-      <div className="bg-gradient-to-r from-brand-900/60 to-brand-600/20 border border-brand-500/30 rounded-2xl p-6 mb-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <p className="text-gray-400 text-sm mb-1">Pending Rewards</p>
-          <p className="text-3xl font-bold text-white">{balance} <span className="text-brand-400 text-lg">RWD</span></p>
-          <p className="text-gray-500 text-xs mt-1">{stakedNfts.length} NFT{stakedNfts.length !== 1 ? 's' : ''} currently staked</p>
+    <div className="max-w-6xl mx-auto px-4 py-8">
+      {/* Rewards Panel */}
+      <div className="bg-gradient-to-r from-purple-900/40 to-pink-900/40 border border-purple-500/30 rounded-2xl p-6 mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <p className="text-gray-400 text-sm mb-1">Pending Stellar Rewards</p>
+            <p className="text-3xl font-bold text-white">{balance} <span className="text-purple-400 text-lg">RWD</span></p>
+            <p className="text-gray-500 text-sm mt-1">{stakedNFTs.length} NFT{stakedNFTs.length !== 1 ? 's' : ''} staked on Soroban</p>
+          </div>
+          <button
+            onClick={claim}
+            disabled={isClaiming || balance === '0.0000'}
+            className="min-h-[44px] px-6 py-3 rounded-xl text-sm font-semibold bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+          >
+            {isClaiming ? (
+              <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Claiming...</>
+            ) : 'Claim Rewards'}
+          </button>
         </div>
-        <button
-          onClick={claim}
-          disabled={isClaiming || stakedNfts.length === 0}
-          className="min-h-[44px] px-6 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium transition-colors text-sm flex items-center gap-2 whitespace-nowrap"
-        >
-          {isClaiming ? (
-            <>
-              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-              Claiming...
-            </>
-          ) : '💰 Claim Rewards'}
-        </button>
       </div>
+
+      <h1 className="text-2xl font-bold text-white mb-6">Staked NFTs</h1>
 
       {isLoading && (
         <div className="flex justify-center py-20">
-          <svg className="animate-spin h-8 w-8 text-brand-500" viewBox="0 0 24 24" fill="none">
+          <svg className="animate-spin h-10 w-10 text-purple-400" viewBox="0 0 24 24" fill="none">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
           </svg>
         </div>
       )}
 
-      {!isLoading && (
-        <>
-          {/* Staked NFTs */}
-          <section className="mb-10">
-            <h2 className="text-xl font-bold text-white mb-4">Staked NFTs ({stakedNfts.length})</h2>
-            {stakedNfts.length === 0 ? (
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
-                <p className="text-gray-400">No staked NFTs. Stake an NFT below to start earning rewards.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {stakedNfts.map((nft) => (
-                  <NFTCard
-                    key={nft.tokenId}
-                    tokenId={nft.tokenId}
-                    imageUrl={nft.imageUrl}
-                    isStaked={true}
-                    isPending={isUnstaking[nft.tokenId] || false}
-                    onUnstake={() => unstake(nft.tokenId)}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
+      {!isLoading && stakedNFTs.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <div className="text-5xl mb-4">💎</div>
+          <h2 className="text-xl font-semibold text-white mb-2">No staked NFTs</h2>
+          <p className="text-gray-400">Stake your NFTs from the Dashboard to start earning Stellar rewards.</p>
+        </div>
+      )}
 
-          {/* Available to Stake */}
-          <section>
-            <h2 className="text-xl font-bold text-white mb-4">Available to Stake ({unstakedNfts.length})</h2>
-            {unstakedNfts.length === 0 ? (
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
-                <p className="text-gray-400">All your NFTs are staked or you have none. Mint more from the Dashboard.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {unstakedNfts.map((nft) => (
-                  <NFTCard
-                    key={nft.tokenId}
-                    tokenId={nft.tokenId}
-                    imageUrl={nft.imageUrl}
-                    isStaked={false}
-                    isPending={isStaking[nft.tokenId] || false}
-                    onStake={() => stake(nft.tokenId)}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-        </>
+      {!isLoading && stakedNFTs.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {stakedNFTs.map((nft) => (
+            <NFTCard
+              key={nft.tokenId}
+              tokenId={nft.tokenId}
+              imageUrl={nft.imageUrl}
+              isStaked={true}
+              isPending={!!isUnstaking[nft.tokenId]}
+              onUnstake={() => unstake(nft.tokenId)}
+            />
+          ))}
+        </div>
       )}
     </div>
   )
