@@ -1,95 +1,109 @@
-# Web3 NFT Game Marketplace
+# Stellar NFT Game Marketplace
 
-A modern, mobile-responsive Web3 NFT Game Marketplace built with React (Vite), Tailwind CSS, and ethers.js.
+A modern, mobile-responsive NFT Game Marketplace built on the **Stellar blockchain** using **Soroban smart contracts**, React (Vite), and Tailwind CSS.
+
+## Live Demo
+> Deploy to Vercel/Netlify and add link here
 
 ## Features
 
-- Connect MetaMask wallet
-- View owned NFTs (ERC-721)
-- Mint new game asset NFTs
-- Stake NFTs to earn ERC-20 reward tokens
-- Unstake NFTs and claim rewards
-- Toast notifications for all transactions
-- Fully responsive (mobile, tablet, desktop)
+- Connect **Freighter wallet** (Stellar's browser wallet)
+- View owned NFTs on Stellar
+- Mint new game asset NFTs via Soroban contract
+- **Stake NFTs** to earn custom Stellar tokens (inter-contract calls)
+- **Unstake NFTs** and claim rewards
+- Real-time transaction status with toast notifications
+- Fully mobile responsive
 
 ## Tech Stack
 
 - React 18 + Vite
 - Tailwind CSS
-- ethers.js v6
+- **@stellar/stellar-sdk** for Soroban RPC interactions
+- **Freighter wallet** for transaction signing
 - React Router v6
-- fast-check (property-based testing)
-- Vitest + React Testing Library
+- GitHub Actions CI/CD
+
+## Stellar Architecture
+
+```
+Frontend (React)
+    ↓ @stellar/stellar-sdk
+Soroban RPC Server
+    ↓
+┌─────────────────────────────────────┐
+│  NFT Contract (ERC-721 equivalent)  │
+│  Token Contract (SEP-41 token)      │
+│  Staking Contract                   │
+│    └─ inter-contract calls to NFT   │
+│    └─ inter-contract calls to Token │
+└─────────────────────────────────────┘
+```
 
 ## Getting Started
 
-### 1. Install dependencies
+### Prerequisites
+
+1. Install [Freighter wallet](https://freighter.app) browser extension
+2. Fund your testnet account at [Stellar Laboratory](https://laboratory.stellar.org/#account-creator?network=test)
+
+### Setup
 
 ```bash
 npm install
-```
-
-### 2. Configure environment variables
-
-Copy `.env.example` to `.env` and fill in your deployed contract addresses:
-
-```bash
 cp .env.example .env
-```
-
-```env
-VITE_NFT_CONTRACT_ADDRESS=0x...
-VITE_REWARD_TOKEN_ADDRESS=0x...
-VITE_STAKING_CONTRACT_ADDRESS=0x...
-VITE_CHAIN_ID=1
-```
-
-### 3. Run development server
-
-```bash
+# Fill in your deployed Soroban contract IDs
 npm run dev
 ```
 
-### 4. Run tests
+### Deploy Soroban Contracts
 
 ```bash
-npx vitest --run
+# Install Stellar CLI
+cargo install --locked stellar-cli
+
+# Deploy NFT contract
+stellar contract deploy --wasm nft.wasm --network testnet
+
+# Deploy Token contract  
+stellar contract deploy --wasm token.wasm --network testnet
+
+# Deploy Staking contract
+stellar contract deploy --wasm staking.wasm --network testnet
 ```
 
-### 5. Production build
+### Environment Variables
 
-```bash
-npm run build
-```
-
-## Project Structure
-
-```
-src/
-├── components/       # Shared UI components
-├── hooks/            # Custom Web3 hooks
-├── pages/            # Page components (Home, Dashboard, Staking)
-├── contracts/        # ABIs and contract config
-├── utils/            # Utility functions
-└── types/            # TypeScript types
-```
-
-## Deployment
-
-- **Vercel**: Import repo, set framework to Vite, add env vars
-- **Netlify**: Connect repo, build command `npm run build`, publish dir `dist`
+| Variable | Description |
+|---|---|
+| `VITE_NFT_CONTRACT_ID` | Soroban NFT contract address |
+| `VITE_TOKEN_CONTRACT_ID` | Soroban reward token contract address |
+| `VITE_STAKING_CONTRACT_ID` | Soroban staking contract address |
+| `VITE_SOROBAN_RPC_URL` | Soroban RPC endpoint |
+| `VITE_NETWORK_PASSPHRASE` | Stellar network passphrase |
 
 ## CI/CD
 
-GitHub Actions workflow runs on every push to `main`:
+GitHub Actions runs on every push to `main`:
 - Install dependencies
-- Build production bundle
+- Type check
+- Production build
 - Verify build output
 
-## Smart Contracts
+## Deployment
 
-| Contract | Interface |
-|---|---|
-| NFT Contract | ERC-721 (mint, approve, tokenURI) |
-| Reward Token | ERC-20 (balanceOf, decimals) |
-| Staking Contract | stake, unstake, claim, pendingRewards |
+**Vercel**: Import repo, set framework to Vite, add env vars  
+**Netlify**: Connect repo, build command `npm run build`, publish dir `dist`
+
+## Screenshots
+
+> Add mobile responsive screenshot here  
+> Add CI/CD pipeline screenshot here
+
+## Contract Addresses (Testnet)
+
+> Add your deployed contract IDs here after deployment
+
+## Transaction Hashes
+
+> Add sample transaction hashes here after testing
