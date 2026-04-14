@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { StellarWallet } from '../types'
 
-// Freighter wallet API (injected by Freighter browser extension)
 declare global {
   interface Window {
     freighter?: {
@@ -13,6 +12,23 @@ declare global {
   }
 }
 
+// Wait for Freighter to inject into the page
+async function waitForFreighter(maxWait = 3000): Promise<boolean> {
+  if (window.freighter) return true
+  return new Promise((resolve) => {
+    const start = Date.now()
+    const interval = setInterval(() => {
+      if (window.freighter) {
+        clearInterval(interval)
+        resolve(true)
+      } else if (Date.now() - start > maxWait) {
+        clearInterval(interval)
+        resolve(false)
+      }
+    }, 100)
+  })
+}
+
 export function useWallet(): StellarWallet {
   const [publicKey, setPublicKey] = useState<string>('')
   const [isConnecting, setIsConnecting] = useState(false)
@@ -21,28 +37,28 @@ export function useWallet(): StellarWallet {
   // Auto-reconnect if already connected
   useEffect(() => {
     const tryReconnect = async () => {
-      if (!window.freighter) return
+      const found = await waitForFreighter()
+      if (!found || !window.freighter) return
       try {
         const connected = await window.freighter.isConnected()
         if (connected) {
           const key = await window.freighter.getPublicKey()
-          setPublicKey(key)
+          if (key) setPublicKey(key)
         }
-      } catch {
-        // not connected, ignore
-      }
+      } catch { /* not connected */ }
     }
     tryReconnect()
   }, [])
 
   const connect = useCallback(async () => {
-    if (!window.freighter) {
-      setError('Freighter wallet is not installed. Please install it from freighter.app')
-      return
-    }
     setIsConnecting(true)
     setError(null)
     try {
+      const found = await waitForFreighter()
+      if (!found || !window.freighter) {
+        setError('Freighter wallet is not installed. Please install it from freighter.app')
+        return
+      }
       const key = await window.freighter.getPublicKey()
       setPublicKey(key)
     } catch (err: unknown) {
@@ -59,7 +75,8 @@ export function useWallet(): StellarWallet {
   }, [])
 
   const signTransaction = useCallback(async (xdr: string): Promise<string> => {
-    if (!window.freighter) throw new Error('Freighter not installed')
+    const found = await waitForFreighter()
+    if (!found || !window.freighter) throw new Error('Freighter not installed')
     const networkPassphrase = import.meta.env.VITE_NETWORK_PASSPHRASE || 'Test SDF Network ; September 2015'
     return window.freighter.signTransaction(xdr, { networkPassphrase })
   }, [])
