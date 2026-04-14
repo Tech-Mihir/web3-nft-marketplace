@@ -27,18 +27,21 @@ export function useWallet(): StellarWallet {
   const [publicKey, setPublicKey] = useState<string>('')
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [freighterDetected, setFreighterDetected] = useState(false)
 
   useEffect(() => {
     const tryReconnect = async () => {
       const api = await getApi()
-      if (!api) return
-      try {
-        const { isConnected } = await api.isConnected()
-        if (isConnected) {
-          const result = await api.getAddress()
-          if (result?.address) setPublicKey(result.address)
-        }
-      } catch { /* not connected */ }
+      if (api) {
+        setFreighterDetected(true)
+        try {
+          const { isConnected } = await api.isConnected()
+          if (isConnected) {
+            const result = await api.getAddress()
+            if (result?.address) setPublicKey(result.address)
+          }
+        } catch { /* not connected */ }
+      }
     }
     tryReconnect()
   }, [])
@@ -86,7 +89,7 @@ export function useWallet(): StellarWallet {
     publicKey,
     isConnected: !!publicKey,
     isConnecting,
-    error,
+    error: freighterDetected ? error : (error?.includes('not detected') ? error : null),
     connect,
     disconnect,
     signTransaction,
