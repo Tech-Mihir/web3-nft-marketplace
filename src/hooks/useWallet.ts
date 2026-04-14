@@ -3,7 +3,6 @@ import {
   isConnected,
   isAllowed,
   setAllowed,
-  requestAccess,
   getAddress,
   signTransaction as freighterSignTx,
 } from '@stellar/freighter-api'
@@ -14,7 +13,6 @@ export function useWallet(): StellarWallet {
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Auto-reconnect if already allowed
   useEffect(() => {
     const tryReconnect = async () => {
       try {
@@ -34,21 +32,27 @@ export function useWallet(): StellarWallet {
     setIsConnecting(true)
     setError(null)
     try {
-      // Check Freighter is installed
       const connResult = await isConnected()
       if (!connResult.isConnected) {
         setError('Freighter is not installed. Please install from freighter.app')
         return
       }
 
-      // Request access — triggers Freighter popup if not yet allowed
-      const accessResult = await requestAccess()
-      if (accessResult.error) {
-        setError(String(accessResult.error))
+      // setAllowed triggers the Freighter permission popup
+      const allowResult = await setAllowed()
+      if (!allowResult.isAllowed) {
+        setError('Please allow this app in Freighter to continue.')
         return
       }
-      if (accessResult.address) {
-        setPublicKey(accessResult.address)
+
+      // Now get the address
+      const addrResult = await getAddress()
+      if (addrResult.error) {
+        setError(String(addrResult.error))
+        return
+      }
+      if (addrResult.address) {
+        setPublicKey(addrResult.address)
       }
     } catch (err: unknown) {
       const e = err as { message?: string }
