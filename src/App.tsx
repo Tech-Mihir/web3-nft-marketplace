@@ -28,10 +28,11 @@ export default function App() {
       <div className="min-h-screen bg-gray-950 text-white">
         <header className="sticky top-0 z-40 bg-gray-950/80 backdrop-blur-md border-b border-white/10">
           <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-6">
-              <span className="text-lg font-bold text-white">
+            <div className="flex items-center gap-3">
+              <span className="text-lg font-bold text-white whitespace-nowrap">
                 ⭐ <span className="hidden sm:inline">Stellar NFT Market</span>
               </span>
+              <div className="w-px h-5 bg-white/20 hidden sm:block" />
               <Navigation />
             </div>
             <WalletButton
