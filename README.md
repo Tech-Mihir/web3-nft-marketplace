@@ -2,8 +2,9 @@
 
 A modern, mobile-responsive NFT Game Marketplace built on the **Stellar blockchain** using **Soroban smart contracts**, React (Vite), and Tailwind CSS.
 
-## Live Demo
-> Deploy to Vercel/Netlify and add link here
+## Live Demo## Live Demo
+https://web3nftmarketplace.vercel.app
+
 
 ## Features
 
